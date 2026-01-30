@@ -1,0 +1,34 @@
+/* global.css */
+@font-face {
+    font-family: 'DungGeunMo';
+    src: url('https://cdn.jsdelivr.net/gh/projectnoonnu/noonfonts_six@1.2/DungGeunMo.woff') format('woff');
+}
+
+body {
+    margin: 0;
+    padding: 0;
+    font-family: 'DungGeunMo', sans-serif;
+    background-color: #FFDEE9;
+    /* 배경 연분홍 */
+    background-image: radial-gradient(#FFB6C1 0.5px, #FFDEE9 0.5px);
+    /* 미세한 도트 무늬 */
+    background-size: 10px 10px;
+    overflow: hidden;
+}
+
+/* 윈도우 95/98 스타일의 입체감 버튼 */
+.retro-btn-style {
+    background: #f0f0f0;
+    border: 2px solid #fff;
+    border-right-color: #555;
+    border-bottom-color: #555;
+    padding: 4px 10px;
+    cursor: pointer;
+    font-family: 'DungGeunMo';
+}
+
+.retro-btn-style:active {
+    border: 2px solid #555;
+    border-right-color: #fff;
+    border-bottom-color: #fff;
+}
