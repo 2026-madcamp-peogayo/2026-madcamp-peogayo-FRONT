@@ -1,525 +1,578 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import Draggable from 'react-draggable';
+
 import WindowFrame from '../components/WindowFrame';
-import DrawingBoard from '../components/DrawingBoard';
+import HomeSidebar from '../components/HomeSidebar';
+import HomeMainContent from '../components/HomeMainContent';
+import TogetherBoard from '../components/TogetherBoard';
+import DrawingBoard from '../components/DrawingBoard'; // DrawingBoard 컴포넌트 경로 확인 필요
+
+// ★ 서버 URL 상수
+const SERVER_URL = "http://13.125.245.75:8080";
 
 const MyHome = () => {
-    const MY_NICKNAME = '체리쥬빌레';
+    const [activeTab, setActiveTab] = useState('home');
+    const [homeContentTab, setHomeContentTab] = useState('posts');
 
-    // 🗂️ 탭 상태 관리
-    const [activeTab, setActiveTab] = useState('home'); // 'home' vs 'recommend'
-    const [homeContentTab, setHomeContentTab] = useState('posts'); // 'posts' vs 'guest'
-    const [recommendTab, setRecommendTab] = useState('today'); // 'today' vs 'friends'
-
-    // 🪟 팝업(모달) 상태 관리
+    // 팝업 상태
     const [isSettingOpen, setIsSettingOpen] = useState(false);
     const [isWriteOpen, setIsWriteOpen] = useState(false);
     const [isLikeListOpen, setIsLikeListOpen] = useState(false);
 
-    // 🔄 강제 리렌더링용
-    const [trigger, setTrigger] = useState(false);
-
-    // 📍 Refs
-    const nodeRef = useRef(null);
+    // Refs
+    const settingRef = useRef(null);
     const writeRef = useRef(null);
-    const likeRef = useRef(null);
+    const likeListRef = useRef(null);
 
-    // ==========================================
-    // 💾 [데이터] 전체 유저 DB
-    // ==========================================
-    const allUsersData = useRef({
-        '체리쥬빌레': {
-            nickname: '체리쥬빌레',
-            intro: '오늘도 핑크색 하루 되세요! ♡',
-            profileImg: 'https://via.placeholder.com/150/FFDEE9/FF69B4?text=Me',
-            isPrivate: false,
-            friends: ['복숭아농장'],
-            posts: [],
-            guestbook: [{ id: 1, author: '딸기우유', content: '홈피 너무 예뻐요! 맞팔해요~', date: '2023.10.24' }],
-        },
-        '복숭아농장': {
-            nickname: '복숭아농장',
-            intro: '복숭아 팝니다 🍑 (일촌공개)',
-            profileImg: 'https://via.placeholder.com/150/FFB7B2/ffffff?text=Peach',
-            isPrivate: true,
-            friends: ['체리쥬빌레'],
-            posts: [{ id: 10, content: 'https://via.placeholder.com/400x300/FFB7B2/ffffff?text=Peach+Drawing', date: '2023.10.20', author: '복숭아농장', likes: ['체리쥬빌레'] }],
-            guestbook: []
-        },
-        '초코쿠키': {
-            nickname: '초코쿠키',
-            intro: '달달한게 최고야 🍪',
-            profileImg: 'https://via.placeholder.com/150/D2691E/ffffff?text=Cookie',
-            isPrivate: false,
-            friends: [],
-            posts: [{ id: 11, content: 'https://via.placeholder.com/400x300/8B4513/ffffff?text=Cookie+Art', date: '2023.10.22', author: '초코쿠키', likes: [] }],
-            guestbook: [{ id: 2, author: '체리쥬빌레', content: '퍼가요~♡', date: '2023.10.26' }]
-        },
-        '하늘구름': {
-            nickname: '하늘구름',
-            intro: '둥실둥실 ☁️',
-            profileImg: 'https://via.placeholder.com/150/87CEEB/ffffff?text=Cloud',
-            isPrivate: false,
-            friends: [],
-            posts: [{ id: 12, content: 'https://via.placeholder.com/400x300/E0FFFF/000000?text=Sky+View', date: '2023.10.25', author: '하늘구름', likes: ['체리쥬빌레', '초코쿠키'] }],
-            guestbook: []
-        },
-        '비밀요원': {
-            nickname: '비밀요원',
-            intro: '접근 금지 구역',
-            profileImg: 'https://via.placeholder.com/150/333333/ffffff?text=Secret',
-            isPrivate: true,
-            friends: [],
-            posts: [{ id: 99, content: 'https://via.placeholder.com/400x300/000/fff?text=Secret', date: '2023.10.01', author: '비밀요원', likes: [] }],
-            guestbook: []
-        },
-        // (없는 유저 테스트용: 딸기우유는 DB에 없어서 클릭 시 알림 뜸)
+    // 데이터 상태
+    const [myInfo, setMyInfo] = useState(null);
+    const [currentUserId, setCurrentUserId] = useState(null);
+
+    const [homeInfo, setHomeInfo] = useState({
+        id: null, nickname: 'Loading...', intro: '', profileImageUrl: '', isHomePrivate: false, friends: []
     });
-
-    // 👤 현재 보여지는 화면의 주인 (State)
-    const [user, setUser] = useState(allUsersData.current['체리쥬빌레']);
-    const [posts, setPosts] = useState(allUsersData.current['체리쥬빌레'].posts);
-    const [guestbook, setGuestbook] = useState(allUsersData.current['체리쥬빌레'].guestbook);
-
-    // ✨ 추천 탭용 데이터 (State)
-    const [recommendPosts, setRecommendPosts] = useState([
-        { id: 101, author: '하늘구름', date: '2023.10.26', content: 'https://via.placeholder.com/400x300/87CEEB/ffffff?text=Sunny+Day', likes: ['user1', '체리쥬빌레'] },
-        { id: 102, author: '복숭아농장', date: '2023.10.26', content: 'https://via.placeholder.com/400x300/FFB7B2/ffffff?text=Peach+Juice', likes: ['cherry'] },
-        { id: 103, author: '비밀요원', date: '2023.10.25', content: 'https://via.placeholder.com/400x300/333/fff?text=TopSecret', likes: [] },
-    ]);
-    const [friendPosts, setFriendPosts] = useState([
-        { id: 201, author: '복숭아농장', date: '방금 전', content: 'https://via.placeholder.com/400x300/FFB7B2/ffffff?text=For+Friends', likes: ['me'] },
-        { id: 202, author: '초코쿠키', date: '1시간 전', content: 'https://via.placeholder.com/400x300/8B4513/ffffff?text=Cookie+Yum', likes: [] },
-    ]);
-
-    // 설정/작성/팝업 관련 State
-    const [tempImg, setTempImg] = useState(user.profileImg);
-    const [tempIsPrivate, setTempIsPrivate] = useState(user.isPrivate);
+    const [posts, setPosts] = useState([]);
+    const [guestbook, setGuestbook] = useState([]);
     const [newGuestMsg, setNewGuestMsg] = useState('');
     const [selectedLikeUsers, setSelectedLikeUsers] = useState([]);
 
-    // 권한 체크
-    const isMyHome = user.nickname === MY_NICKNAME;
-    const isMyFriend = allUsersData.current[MY_NICKNAME].friends.includes(user.nickname);
-    const canAccess = isMyHome || !user.isPrivate || isMyFriend;
+    // 설정 임시 상태
+    const [tempProfileImg, setTempProfileImg] = useState(null);
+    const [tempPreviewImg, setTempPreviewImg] = useState('');
+    const [tempNickname, setTempNickname] = useState('');
+    const [tempIntro, setTempIntro] = useState('');
+    const [tempIsPrivate, setTempIsPrivate] = useState(false);
 
+    const [nicknameMsg, setNicknameMsg] = useState('');
+    const [isNicknameChecked, setIsNicknameChecked] = useState(true);
 
-    // ==========================================
-    // 🚀 기능 함수들
-    // ==========================================
+    const isMyHome = myInfo && currentUserId === myInfo.id;
+    const canAccess = isMyHome || !homeInfo.isHomePrivate;
+    // userId 혹은 id 둘 중 하나라도 일치하면 친구로 인정
+    const isMyFriend = myInfo && homeInfo.friends?.some(f => (f.userId || f.id) === myInfo.id);
+    const [feedTab, setFeedTab] = useState('ALL'); // 'ALL' 또는 'FRIENDS'
 
-    const visitHome = (targetNickname) => {
-        const targetData = allUsersData.current[targetNickname];
-        // ⚠️ DB에 없는 유저(예: 딸기우유)일 경우 처리
-        if (!targetData) { alert('존재하지 않는 유저입니다.'); return; }
-
-        setUser({ ...targetData });
-        setPosts(targetData.posts);
-        setGuestbook(targetData.guestbook);
-        setTempImg(targetData.profileImg);
-        setTempIsPrivate(targetData.isPrivate);
-        setActiveTab('home');
-        setHomeContentTab('posts');
-        const mainContent = document.getElementById('main-content');
-        if (mainContent) mainContent.scrollTop = 0;
+    // ★ 이미지 URL 처리 헬퍼 함수
+    const getImgUrl = (path) => {
+        if (!path) return null;
+        if (path.startsWith('http')) return path;
+        return `${SERVER_URL}${path.startsWith('/') ? '' : '/'}${path}`;
     };
 
-    // 🌊 파도타기 (나 자신 & 현재 보고있는 사람 제외)
-    const handleSurfing = () => {
-        const allUserNames = Object.keys(allUsersData.current);
-        const potentialTargets = allUserNames.filter(name =>
-            name !== MY_NICKNAME &&
-            name !== user.nickname
-        );
+    // 1. 내 정보 체크
+    useEffect(() => {
+        const checkSession = async () => {
+            try {
+                const res = await fetch('/api/users/me');
+                if (res.ok) {
+                    const data = await res.json();
+                    setMyInfo(data);
+                    if (!currentUserId) setCurrentUserId(data.id);
+                }
+            } catch (e) { console.error("Session Check Failed", e); }
+        };
+        checkSession();
+    }, []);
 
-        if (potentialTargets.length === 0) {
-            alert('파도탈 곳이 없어요..');
+    // 2. 홈피 데이터 로드
+    useEffect(() => {
+        if (currentUserId) loadHomeData(currentUserId);
+    }, [currentUserId]);
+
+
+    // 3. 추천 탭 (전체공개/친구공개 글) 로직 구현
+    useEffect(() => {
+        const fetchFeeds = async () => {
+            if (activeTab === 'recommend') {
+                try {
+                    // API 엔드포인트는 백엔드 명세에 맞게 수정 필요 (예시: /api/posts/public, /api/posts/friends)
+                    const endpoint = feedTab === 'ALL' ? '/api/posts/public' : '/api/posts/feed';
+                    const res = await fetch(endpoint);
+                    if (res.ok) {
+                        const data = await res.json();
+                        const processed = data.map(p => ({
+                            ...p,
+                            contentImageUrl: getImgUrl(p.contentImageUrl),
+                            writerProfileImg: getImgUrl(p.writerProfileImg)
+                        }));
+                        setPosts(processed);
+                    }
+                } catch (e) {
+                    console.error("피드 로딩 실패", e);
+                }
+            }
+        };
+        fetchFeeds();
+    }, [activeTab, feedTab]); // 탭이 바뀌거나 피드필터가 바뀌면 재실행
+
+    const handleGoMyHome = () => {
+        if (!myInfo) {
+            console.log("내 정보를 불러오는 중입니다...");
+            return;
+        }
+        setPosts([]); // 기존 글 비우기
+        setCurrentUserId(myInfo.id);
+        setActiveTab('home');
+        setHomeContentTab('posts');
+        loadHomeData(myInfo.id);
+    };
+
+    const loadHomeData = async (targetId) => {
+        try {
+            // 1. 홈 기본 정보
+            const homeRes = await fetch(`/api/home/${targetId}`);
+            let homeData = {};
+            if (homeRes.ok) {
+                homeData = await homeRes.json();
+                homeData.profileImageUrl = getImgUrl(homeData.profileImageUrl);
+            }
+
+            // 2. 친구 목록
+            let friendsData = [];
+            try {
+                const friendRes = await fetch(`/api/friends/${targetId}`);
+                if (friendRes.ok) {
+                    friendsData = await friendRes.json();
+                    friendsData = friendsData.map(f => ({
+                        ...f,
+                        profileImg: getImgUrl(f.profileImg)
+                    }));
+                }
+            } catch (err) {
+                console.error("친구 목록 로드 실패", err);
+            }
+
+            setHomeInfo({
+                ...homeData,
+                intro: homeData.greeting,
+                friends: friendsData
+            });
+
+            // 4. 내 홈이면 설정값 초기화
+            if (myInfo && Number(targetId) === Number(myInfo.id)) {
+                setTempNickname(homeData.nickname || '');
+                setTempIntro(homeData.greeting || '');
+                setTempPreviewImg(homeData.profileImageUrl);
+                setTempIsPrivate(homeData.isHomePrivate || false);
+                setIsNicknameChecked(true);
+                setNicknameMsg('');
+            }
+
+            // 5. 게시글 목록
+            const postRes = await fetch(`/api/posts/${targetId}`);
+            if (postRes.ok) {
+                const postData = await postRes.json();
+                const processedPosts = postData.map(p => ({
+                    ...p,
+                    contentImageUrl: getImgUrl(p.contentImageUrl),
+                    writerProfileImg: getImgUrl(p.writerProfileImg)
+                }));
+                setPosts(processedPosts);
+            }
+
+            // 6. 방명록
+            const guestRes = await fetch(`/api/guestbooks/${targetId}`);
+            if (guestRes.ok) {
+                const guestData = await guestRes.json();
+                const processedGuestbook = guestData.map(g => ({
+                    ...g,
+                    writerProfileImg: getImgUrl(g.writerProfileImg)
+                }));
+                setGuestbook(processedGuestbook);
+            }
+
+        } catch (e) {
+            console.error(e);
+        }
+    };
+
+    // --- 기능 핸들러 ---
+    const visitHome = (userId) => {
+        setCurrentUserId(userId);
+        setActiveTab('home');
+        setHomeContentTab('posts');
+    };
+
+    const handleSurfing = async () => {
+        // 무한 루프 방지를 위해 최대 3번까지만 재시도
+        let retryCount = 0;
+        const MAX_RETRIES = 3;
+        let foundOthers = false;
+
+        while (retryCount < MAX_RETRIES) {
+            try {
+                const res = await fetch('/api/main/surfing');
+                if (res.ok) {
+                    const data = await res.json();
+                    let targetId = null;
+
+                    // 데이터 파싱 (객체인지 숫자인지 확인)
+                    if (typeof data === 'object' && data !== null) {
+                        targetId = data.userId || data.id;
+                    } else if (typeof data === 'number') {
+                        targetId = data;
+                    }
+
+                    if (targetId) {
+                        // ★ 핵심 로직: 내가 아니면 이동하고 종료
+                        if (Number(targetId) !== Number(currentUserId)) {
+                            visitHome(targetId);
+                            foundOthers = true;
+                            break; // 루프 탈출
+                        } else {
+                            // 나 자신이 나오면 로그만 찍고 다시 루프를 돕니다
+                            console.log(`파도타기 ${retryCount + 1}번째 시도: 나 자신이 나왔습니다. 다시 찾습니다... 🌊`);
+                            retryCount++;
+                        }
+                    } else {
+                        // ID가 없으면 그냥 종료
+                        break;
+                    }
+                } else {
+                    alert("파도타기 서버 오류!");
+                    break;
+                }
+            } catch (e) {
+                console.error(e);
+                break;
+            }
+        }
+
+        // 3번 다 돌았는데도 나만 나왔거나 실패했을 경우
+        if (!foundOthers) {
+            alert("지금은 파도를 탈 수 있는 다른 미니홈피가 없어요 😢 (혹시 나 혼자?!)");
+        }
+    };
+
+    const handleNicknameChange = (e) => {
+        const newName = e.target.value;
+        setTempNickname(newName);
+        if (newName === homeInfo.nickname) {
+            setIsNicknameChecked(true);
+            setNicknameMsg('');
+        } else {
+            setIsNicknameChecked(false);
+            setNicknameMsg('중복 확인을 해주세요.');
+        }
+    };
+
+    const checkNicknameDuplicate = async () => {
+        if (!tempNickname.trim()) {
+            setNicknameMsg('닉네임을 입력해주세요.');
+            return;
+        }
+        if (tempNickname === homeInfo.nickname) {
+            setIsNicknameChecked(true);
+            setNicknameMsg('현재 사용 중인 닉네임입니다.');
+            return;
+        }
+        try {
+            const res = await fetch(`/api/users/check-nickname?nickname=${encodeURIComponent(tempNickname)}`);
+            if (res.ok) {
+                const isDuplicate = await res.json();
+                if (isDuplicate) {
+                    setIsNicknameChecked(false);
+                    setNicknameMsg('이미 사용 중인 닉네임입니다 😢');
+                } else {
+                    setIsNicknameChecked(true);
+                    setNicknameMsg('사용 가능한 닉네임입니다 ✨');
+                }
+            }
+        } catch (e) { setNicknameMsg('서버 연결 실패'); }
+    };
+
+    const saveSettings = async () => {
+        const isNicknameChanged = tempNickname !== homeInfo.nickname;
+        if (isNicknameChanged && !isNicknameChecked) {
+            alert("닉네임이 변경되었습니다. 중복 확인을 꼭 해주세요! 🧐");
             return;
         }
 
-        const randomName = potentialTargets[Math.floor(Math.random() * potentialTargets.length)];
-        visitHome(randomName);
-    };
-
-    const toggleFriend = () => {
-        const myData = allUsersData.current[MY_NICKNAME];
-        const targetData = allUsersData.current[user.nickname];
-
-        if (isMyFriend) {
-            if (window.confirm(`${user.nickname}님과 일촌을 해제하시겠습니까?`)) {
-                myData.friends = myData.friends.filter(name => name !== user.nickname);
-                targetData.friends = targetData.friends.filter(name => name !== MY_NICKNAME);
-                alert('일촌이 해제되었습니다.');
-            }
-        } else {
-            myData.friends.push(user.nickname);
-            targetData.friends.push(MY_NICKNAME);
-            alert(`${user.nickname}님과 일촌이 되었습니다! 🎉`);
+        const formData = new FormData();
+        const jsonPart = {
+            nickname: tempNickname,
+            greeting: tempIntro,
+            isHomePrivate: tempIsPrivate,
+        };
+        formData.append('data', new Blob([JSON.stringify(jsonPart)], { type: 'application/json' }));
+        if (tempProfileImg) {
+            // 주의: 백엔드가 'image'를 원하는지 'profileImage'를 원하는지 확인 필요
+            // 여기서는 기존 코드대로 'profileImage' 유지
+            formData.append('profileImage', tempProfileImg);
         }
-        setTrigger(!trigger);
+
+        try {
+            const res = await fetch('/api/home/profile', {
+                method: 'PUT',
+                body: formData
+            });
+            if (res.ok) {
+                alert("프로필이 변경되었습니다! ✨");
+                setIsSettingOpen(false);
+                loadHomeData(currentUserId);
+            } else {
+                alert("저장 실패... 서버 에러 ㅠ");
+            }
+        } catch (e) { console.error(e); }
     };
 
-    const handleImgChange = (e) => {
-        const file = e.target.files[0];
-        if (file) {
-            const reader = new FileReader();
-            reader.onload = (ev) => { setTempImg(ev.target.result); };
-            reader.readAsDataURL(file);
+    // ▼▼▼ [수정된 부분] 게시글 업로드 핸들러 ▼▼▼
+    const handleUploadPost = async (blob) => {
+        if (!blob) return alert("이미지가 생성되지 않았습니다.");
+
+        const formData = new FormData();
+        // 1. 이미지 파일 추가 (File 객체로 변환 추천)
+        const file = new File([blob], `drawing_${Date.now()}.png`, { type: "image/png" });
+        formData.append("image", file);
+
+        // 2. 게시글 정보 (JSON) - postDto 변수 제거하고 직접 객체 생성
+        const postData = {
+            visibility: "PUBLIC"
+        };
+
+        formData.append("data", new Blob([JSON.stringify(postData)], { type: "application/json" }));
+
+        try {
+            const res = await fetch('/api/posts', {
+                method: 'POST',
+                body: formData
+            });
+            if (res.ok) {
+                alert("업로드 완료! 🎨");
+                setIsWriteOpen(false); // 창 닫기
+                loadHomeData(currentUserId); // 목록 새로고침
+            } else {
+                const errText = await res.text();
+                console.error("Upload Error:", errText);
+                alert("업로드 실패 ㅠㅠ (서버 로그 확인)");
+            }
+        } catch (e) {
+            console.error(e);
+            alert("서버 에러 발생");
         }
     };
+    // ▲▲▲ --------------------------------- ▲▲▲
 
-    const saveSettings = () => {
-        setUser({ ...user, profileImg: tempImg, isPrivate: tempIsPrivate });
-        const myData = allUsersData.current[MY_NICKNAME];
-        myData.profileImg = tempImg;
-        myData.isPrivate = tempIsPrivate;
-        myData.nickname = user.nickname;
-        myData.intro = user.intro;
-        setIsSettingOpen(false);
-    };
-
-    const handleUpload = (drawingData) => {
-        const newPost = { id: Date.now(), content: drawingData, date: new Date().toLocaleString(), author: MY_NICKNAME, likes: [] };
-        setPosts([newPost, ...posts]);
-        allUsersData.current[MY_NICKNAME].posts.unshift(newPost);
-        setIsWriteOpen(false);
-    };
-
-    // 1️⃣ [홈 탭] 좋아요 토글
-    const toggleLike = (postId) => {
-        setPosts(posts.map(p => {
-            if (p.id === postId) {
-                const hasLiked = p.likes.includes(MY_NICKNAME);
-                const newLikes = hasLiked ? p.likes.filter(u => u !== MY_NICKNAME) : [...p.likes, MY_NICKNAME];
-                return { ...p, likes: newLikes };
-            }
-            return p;
-        }));
-    };
-
-    // 2️⃣ [추천 탭] 좋아요 토글
-    const toggleRecommendLike = (postId, listType) => {
-        const targetList = listType === 'today' ? recommendPosts : friendPosts;
-        const setTargetList = listType === 'today' ? setRecommendPosts : setFriendPosts;
-
-        setTargetList(targetList.map(post => {
-            if (post.id === postId) {
-                const hasLiked = post.likes.includes(MY_NICKNAME);
-                const newLikes = hasLiked
-                    ? post.likes.filter(u => u !== MY_NICKNAME)
-                    : [...post.likes, MY_NICKNAME];
-                return { ...post, likes: newLikes };
-            }
-            return post;
-        }));
-    };
-
-    // 3️⃣ [공통] 좋아요 리스트 열기
-    const openLikeList = (likes) => {
-        setSelectedLikeUsers(likes);
+    const handleShowLikes = () => {
+        setSelectedLikeUsers([{ nickname: '테스트유저' }]);
         setIsLikeListOpen(true);
     };
 
-    const addGuestbook = () => {
-        if (!newGuestMsg.trim()) return;
-        const entry = { id: Date.now(), author: MY_NICKNAME, content: newGuestMsg, date: new Date().toLocaleDateString() };
-        setGuestbook([entry, ...guestbook]);
-        allUsersData.current[user.nickname].guestbook.unshift(entry);
-        setNewGuestMsg('');
-    };
+    const toggleFriend = async () => {
+        if (!myInfo) return alert("로그인이 필요합니다 😢");
+        if (isMyHome) return alert("자기 자신과는 일촌을 맺을 수 없습니다 😅");
 
-    const deleteGuestbook = (id) => {
-        if (window.confirm('정말 삭제하시겠습니까?')) {
-            setGuestbook(guestbook.filter(g => g.id !== id));
-            allUsersData.current[user.nickname].guestbook = allUsersData.current[user.nickname].guestbook.filter(g => g.id !== id);
+        const targetId = homeInfo.userId || homeInfo.id;
+        const isAdding = !isMyFriend;
+        const url = isAdding
+            ? `/api/friends/request/${targetId}`
+            : `/api/friends/${targetId}`;
+
+        const method = isAdding ? 'POST' : 'DELETE';
+        const actionMsg = isAdding ? '일촌 목록에 추가하시겠습니까?' : '일촌을 끊으시겠습니까?';
+
+        if (!window.confirm(actionMsg)) return;
+
+        try {
+            const res = await fetch(url, { method: method });
+            if (res.ok) {
+                alert(isAdding ? "일촌으로 등록되었습니다! 🎉" : "일촌이 해제되었습니다.");
+                // 화면 갱신
+                loadHomeData(targetId);
+                // 내 정보(내 사이드바 친구목록)도 갱신
+                const meRes = await fetch('/api/users/me');
+                if (meRes.ok) {
+                    const meData = await meRes.json();
+                    setMyInfo(meData);
+                }
+            } else {
+                alert("처리 실패! (서버 로그를 확인해주세요)");
+            }
+        } catch (e) {
+            console.error("일촌 기능 에러:", e);
+            alert("네트워크 오류가 발생했습니다.");
         }
     };
 
-    // UI용 데이터 필터링
-    const recommendFriendsUI = [
-        { name: '복숭아농장', img: allUsersData.current['복숭아농장'].profileImg },
-        { name: '초코쿠키', img: allUsersData.current['초코쿠키'].profileImg },
-        { name: '하늘구름', img: allUsersData.current['하늘구름'].profileImg }
-    ];
+    const addGuestbook = async () => {
+        if (!newGuestMsg.trim()) return;
+        try {
+            const res = await fetch(`/api/guestbooks/${currentUserId}`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ content: newGuestMsg })
+            });
+            if (res.ok) { setNewGuestMsg(''); loadHomeData(currentUserId); }
+        } catch (e) { console.error(e); }
+    };
 
-    const getFilteredPosts = (postList) => {
-        return postList.filter(post => {
-            const authorData = allUsersData.current[post.author];
-            const amIFriendWithAuthor = allUsersData.current[MY_NICKNAME].friends.includes(post.author);
-            if (authorData && authorData.isPrivate && !amIFriendWithAuthor) return false;
-            return true;
-        });
+    const deleteGuestbook = async (gbId) => {
+        if (!window.confirm("정말 방명록을 삭제하시겠습니까?")) return;
+        try {
+            const res = await fetch(`/api/guestbooks/${gbId}`, { method: 'DELETE' });
+            if (res.ok) { alert("삭제되었습니다."); loadHomeData(currentUserId); }
+        } catch (e) { console.error(e); }
+    };
+
+    const handleDeletePost = async (postId) => {
+        if (!window.confirm("정말 이 게시글을 삭제하시겠습니까? (복구 불가)")) return;
+        try {
+            const res = await fetch(`/api/posts/${postId}`, { method: 'DELETE' });
+            if (res.ok) { alert("게시글이 삭제되었습니다. 🗑️"); loadHomeData(currentUserId); }
+            else { alert("삭제 실패"); }
+        } catch (e) { alert("서버 오류"); }
+    };
+
+    const handleLike = async (postId) => {
+        try { await fetch(`/api/posts/${postId}/like`, { method: 'POST' }); loadHomeData(currentUserId); } catch (e) { }
     };
 
     return (
-        <div style={{ padding: '20px', backgroundColor: '#FFDEE9', minHeight: '100vh' }}>
-            <WindowFrame title={`${user.nickname}'s Sweet Home ${user.isPrivate ? '🔒' : '♡'}`} isMain={true}>
-
-                {/* 상단 네비게이션 */}
-                <div style={{ display: 'flex', gap: '15px', padding: '5px 10px', backgroundColor: '#f0f0f0', borderBottom: '1px solid #ccc', fontSize: '12px', marginBottom: '10px' }}>
-                    <span onClick={() => visitHome(MY_NICKNAME)} style={{ cursor: 'pointer', fontWeight: activeTab === 'home' && isMyHome ? 'bold' : 'normal', color: activeTab === 'home' && isMyHome ? '#FF69B4' : '#000' }}>홈(H)</span>
+        <div style={{ padding: '20px', backgroundColor: '#FFDEE9', minHeight: '100vh', fontFamily: 'DungGeunMo, sans-serif' }}>
+            <WindowFrame
+                title={`${homeInfo.nickname || 'Guest'}'s Sweet Home`}
+                isMain={true}
+            >
+                <div style={{ display: 'flex', gap: '15px', padding: '8px 15px', backgroundColor: '#eee', borderBottom: '1px solid #ccc', fontSize: '12px' }}>
+                    <span
+                        onClick={handleGoMyHome}
+                        style={{
+                            cursor: 'pointer',
+                            fontWeight: activeTab === 'home' && isMyHome ? 'bold' : 'normal',
+                            color: activeTab === 'home' && isMyHome ? '#FF69B4' : '#000'
+                        }}
+                    >마이홈(H)</span>
                     <span onClick={() => setActiveTab('recommend')} style={{ cursor: 'pointer', fontWeight: activeTab === 'recommend' ? 'bold' : 'normal', color: activeTab === 'recommend' ? '#FF69B4' : '#000' }}>추천(R)</span>
-                    <span onClick={handleSurfing} style={{ cursor: 'pointer', color: '#1E90FF', fontWeight: 'bold' }}>파도타기(S) 🌊</span>
+                    <span onClick={handleSurfing} style={{ cursor: 'pointer', color: '#1596ff', fontWeight: 'normal' }}>파도타기(S)</span>
+                    <span onClick={() => setActiveTab('together')} style={{ cursor: 'pointer', color: '#9932CC', fontWeight: activeTab === 'together' ? 'bold' : 'normal', borderLeft: '1px solid #ccc', paddingLeft: '15px' }}>함께그리기</span>
                 </div>
 
-                <div style={{ display: 'flex', gap: '20px' }}>
-
-                    {/* ⬅️ 왼쪽 사이드바 */}
-                    <aside style={{ width: '200px', flexShrink: 0 }}>
-                        <div style={{ background: '#fff', padding: '10px', border: '1px solid #FFC1CC', textAlign: 'center', minHeight: '500px' }}>
-                            {activeTab === 'home' ? (
-                                <>
-                                    <div style={{ width: '100%', height: '150px', backgroundImage: `url(${user.profileImg})`, backgroundSize: 'cover', backgroundPosition: 'center', border: '1px inset #eee', marginBottom: '10px' }} />
-                                    <div style={{ display: 'flex', justifyContent: 'center', gap: '5px', alignItems: 'center' }}>
-                                        <b>{user.nickname}</b>
-                                        {isMyHome ? (
-                                            <button onClick={() => { setTempImg(user.profileImg); setTempIsPrivate(user.isPrivate); setIsSettingOpen(true); }} style={{ cursor: 'pointer', border: 'none', background: 'transparent' }}>⚙️</button>
-                                        ) : (
-                                            <button
-                                                onClick={toggleFriend}
-                                                style={{
-                                                    cursor: 'pointer', border: '1px solid #ddd', borderRadius: '4px',
-                                                    background: isMyFriend ? '#eee' : '#FF69B4', color: isMyFriend ? '#333' : '#fff',
-                                                    fontSize: '11px', padding: '1px 5px', marginLeft: '5px'
-                                                }}
-                                                title={isMyFriend ? "일촌 해제" : "일촌 신청"}
-                                            >
-                                                {isMyFriend ? '➖' : '➕'}
-                                            </button>
-                                        )}
-                                    </div>
-                                    <p style={{ fontSize: '11px', color: '#666', margin: '5px 0' }}>{user.intro}</p>
-
-                                    {/* 일촌 목록 */}
-                                    {canAccess ? (
-                                        <div style={{ marginTop: '15px', borderTop: '1px dashed #ddd', paddingTop: '10px', textAlign: 'left' }}>
-                                            <div style={{ fontSize: '12px', color: '#FF69B4', fontWeight: 'bold', marginBottom: '5px', textAlign: 'center' }}>
-                                                {isMyHome ? 'My Friends' : `${user.nickname}'s Friends`}
-                                            </div>
-                                            <div style={{ height: '180px', overflowY: 'auto', backgroundColor: '#fafafa', border: '1px solid #eee', padding: '5px' }}>
-                                                {(user.friends || []).map((friendName, idx) => (
-                                                    <div key={idx} onClick={() => visitHome(friendName)} style={{ fontSize: '11px', padding: '4px', cursor: 'pointer', borderBottom: '1px dotted #e0e0e0', display: 'flex', gap: '5px' }}>
-                                                        🍊 {friendName}
-                                                    </div>
-                                                ))}
-                                                {(user.friends || []).length === 0 && <div style={{ color: '#ccc', fontSize: '10px', textAlign: 'center' }}>일촌이 없어요..</div>}
-                                            </div>
-                                        </div>
-                                    ) : (
-                                        <div style={{ marginTop: '20px', fontSize: '11px', color: '#999', padding: '10px', background: '#f5f5f5' }}>
-                                            🔒 친구 공개입니다.
-                                        </div>
-                                    )}
-                                </>
-                            ) : (
-                                <>
-                                    {/* 추천 탭 사이드바 */}
-                                    <div style={{ textAlign: 'center' }}>
-                                        <p style={{ fontSize: '12px', fontWeight: 'bold', color: '#FF69B4', marginBottom: '15px', marginTop: '5px' }}>✨ 추천 친구 ✨</p>
-                                        {recommendFriendsUI.map((f, i) => (
-                                            <div key={i} style={{ marginBottom: '15px', padding: '10px 5px', borderBottom: '1px dashed #eee' }}>
-                                                <img
-                                                    src={f.img}
-                                                    alt={f.name}
-                                                    style={{ width: '60px', height: '60px', borderRadius: '50%', objectFit: 'cover', border: '2px solid #FFDEE9', marginBottom: '5px' }}
-                                                />
-                                                <div style={{ fontSize: '12px', fontWeight: 'bold', marginBottom: '5px' }}>{f.name}</div>
-                                                <button
-                                                    onClick={() => visitHome(f.name)}
-                                                    style={{ fontSize: '11px', padding: '3px 8px', cursor: 'pointer', background: '#FF69B4', color: '#fff', border: 'none', borderRadius: '10px' }}
-                                                >
-                                                    방문하기
-                                                </button>
-                                            </div>
-                                        ))}
-                                    </div>
-                                </>
-                            )}
-                        </div>
-                    </aside>
-
-                    {/* ➡️ 오른쪽 메인 컨텐츠 */}
-                    <main id="main-content" style={{ flex: 1, height: '570px', overflowY: 'auto' }}>
-                        <div style={{ background: '#fff', border: '1px solid #FFC1CC', minHeight: '100%', paddingBottom: '15px' }}>
-
-                            {activeTab === 'home' ? (
-                                <>
-                                    {/* --- 🏠 홈 탭 --- */}
-                                    {canAccess ? (
-                                        <>
-                                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '2px solid #FFDEE9', position: 'sticky', top: 0, zIndex: 10, backgroundColor: '#fff', padding: '10px 15px 0 15px', marginBottom: '5px' }}>
-                                                <div style={{ display: 'flex', gap: '10px' }}>
-                                                    <div onClick={() => setHomeContentTab('posts')} style={{ padding: '5px 10px', cursor: 'pointer', fontSize: '13px', fontWeight: 'bold', color: homeContentTab === 'posts' ? '#FF69B4' : '#ccc', borderBottom: homeContentTab === 'posts' ? '2px solid #FF69B4' : 'none', marginBottom: '-2px' }}>게시글</div>
-                                                    <div onClick={() => setHomeContentTab('guest')} style={{ padding: '5px 10px', cursor: 'pointer', fontSize: '13px', fontWeight: 'bold', color: homeContentTab === 'guest' ? '#FF69B4' : '#ccc', borderBottom: homeContentTab === 'guest' ? '2px solid #FF69B4' : 'none', marginBottom: '-2px' }}>방명록</div>
-                                                </div>
-                                                {isMyHome && homeContentTab === 'posts' && (
-                                                    <button onClick={() => setIsWriteOpen(true)} style={{ background: '#FF69B4', color: '#fff', border: 'none', padding: '5px 15px', fontSize: '11px', cursor: 'pointer', borderRadius: '15px', marginBottom: '5px' }}>글쓰기 🖌️</button>
-                                                )}
-                                            </div>
-
-                                            <div style={{ padding: '0 15px' }}>
-                                                {homeContentTab === 'posts' ? (
-                                                    <>
-                                                        {posts.length === 0 && <p style={{ color: '#ccc', textAlign: 'center', marginTop: '50px' }}>게시물이 없습니다.</p>}
-                                                        {posts.map(post => (
-                                                            <div key={post.id} style={{ marginBottom: '15px', padding: '5px 10px 15px 10px', borderBottom: '1px solid #eee', textAlign: 'center' }}>
-                                                                <div style={{ fontSize: '11px', color: '#999', marginBottom: '5px' }}>{post.date}</div>
-                                                                <img src={post.content} alt="post" style={{ maxWidth: '100%', border: '1px solid #eee' }} />
-                                                                <div style={{ marginTop: '8px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '10px' }}>
-                                                                    <span onClick={() => toggleLike(post.id)} style={{ cursor: 'pointer', fontSize: '14px' }}>
-                                                                        {post.likes.includes(MY_NICKNAME) ? '❤️' : '🤍'} {post.likes.length}
-                                                                    </span>
-                                                                    <span onClick={() => openLikeList(post.likes)} style={{ cursor: 'pointer', color: '#999', fontSize: '12px' }}>...</span>
-                                                                </div>
-                                                            </div>
-                                                        ))}
-                                                    </>
-                                                ) : (
-                                                    <div style={{ fontSize: '12px' }}>
-                                                        <div style={{ display: 'flex', gap: '5px', marginBottom: '20px', marginTop: '10px' }}>
-                                                            <input value={newGuestMsg} onChange={(e) => setNewGuestMsg(e.target.value)} placeholder="일촌평 남기기" style={{ flex: 1, padding: '5px', border: '1px solid #ddd' }} />
-                                                            <button onClick={addGuestbook} style={{ background: '#FF69B4', color: '#fff', border: 'none', padding: '5px 10px', cursor: 'pointer' }}>남기기</button>
-                                                        </div>
-                                                        {guestbook.map(g => (
-                                                            <div key={g.id} style={{ padding: '10px', borderBottom: '1px dashed #eee', backgroundColor: '#f9f9f9', marginBottom: '5px' }}>
-                                                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '5px' }}>
-                                                                    <div style={{ display: 'flex', gap: '5px', alignItems: 'center' }}>
-                                                                        {/* ⬇️⬇️ 여기가 수정된 부분입니다 ⬇️⬇️ */}
-                                                                        <b
-                                                                            onClick={() => visitHome(g.author)}
-                                                                            style={{
-                                                                                color: g.author === MY_NICKNAME ? '#FF69B4' : '#333',
-                                                                                cursor: 'pointer',
-                                                                                textDecoration: 'underline'
-                                                                            }}
-                                                                            title={`${g.author}님 홈으로 이동`}
-                                                                        >
-                                                                            {g.author}
-                                                                        </b>
-                                                                        <span style={{ color: '#999', fontSize: '10px' }}>({g.date})</span>
-                                                                    </div>
-                                                                    {(g.author === MY_NICKNAME || isMyHome) && (
-                                                                        <button onClick={() => deleteGuestbook(g.id)} style={{ border: 'none', background: 'transparent', cursor: 'pointer', color: '#ccc' }}>❌</button>
-                                                                    )}
-                                                                </div>
-                                                                <div>{g.content}</div>
-                                                            </div>
-                                                        ))}
-                                                    </div>
-                                                )}
-                                            </div>
-                                        </>
-                                    ) : (
-                                        <div style={{ height: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', color: '#999', gap: '15px' }}>
-                                            <div style={{ fontSize: '60px' }}>🔒</div>
-                                            <div style={{ textAlign: 'center' }}>
-                                                <div style={{ fontSize: '15px', fontWeight: 'bold', color: '#333' }}>비공개 홈입니다.</div>
-                                                <div style={{ fontSize: '12px', marginTop: '5px' }}>일촌을 맺으면 게시글을 볼 수 있어요!</div>
-                                            </div>
-                                            <button onClick={toggleFriend} style={{ background: '#FF69B4', color: '#fff', border: 'none', padding: '8px 15px', borderRadius: '20px', cursor: 'pointer', fontWeight: 'bold', fontSize: '13px' }}>➕ 일촌 신청하기</button>
-                                        </div>
-                                    )}
-                                </>
-                            ) : (
-                                <>
-                                    {/* --- ✨ 추천 탭 --- */}
-                                    <div style={{ position: 'sticky', top: 0, zIndex: 10, backgroundColor: '#fff', padding: '15px 15px 10px 15px', borderBottom: '1px solid #eee' }}>
-                                        <div style={{ display: 'flex', gap: '10px' }}>
-                                            <button onClick={() => setRecommendTab('today')} style={{ flex: 1, padding: '8px', cursor: 'pointer', background: recommendTab === 'today' ? '#FF69B4' : '#eee', color: recommendTab === 'today' ? '#fff' : '#000', border: 'none', fontWeight: 'bold' }}>오늘의 추천글</button>
-                                            <button onClick={() => setRecommendTab('friends')} style={{ flex: 1, padding: '8px', cursor: 'pointer', background: recommendTab === 'friends' ? '#FF69B4' : '#eee', color: recommendTab === 'friends' ? '#fff' : '#000', border: 'none', fontWeight: 'bold' }}>내 친구들의 글</button>
-                                        </div>
-                                    </div>
-
-                                    <div style={{ padding: '15px' }}>
-                                        {getFilteredPosts(recommendTab === 'today' ? recommendPosts : friendPosts).map((item) => (
-                                            <div key={item.id} style={{ marginBottom: '20px', paddingBottom: '15px', borderBottom: '1px solid #eee' }}>
-                                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
-                                                    <div style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
-                                                        <span onClick={() => visitHome(item.author)} style={{ fontSize: '13px', fontWeight: 'bold', color: '#FF69B4', cursor: 'pointer', textDecoration: 'underline' }}>
-                                                            {item.author} 🏠
-                                                        </span>
-                                                    </div>
-                                                    <span style={{ fontSize: '10px', color: '#999' }}>{item.date}</span>
-                                                </div>
-                                                <div style={{ textAlign: 'center', backgroundColor: '#fafafa', padding: '5px', border: '1px solid #eee', marginBottom: '8px' }}>
-                                                    <img src={item.content} alt="drawing" style={{ maxWidth: '100%', maxHeight: '300px', objectFit: 'contain' }} />
-                                                </div>
-
-                                                {/* ✨✨ 좋아요 + 좋아요 명단 보기 ✨✨ */}
-                                                <div style={{ marginTop: '5px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '10px' }}>
-                                                    <span onClick={() => toggleRecommendLike(item.id, recommendTab)} style={{ cursor: 'pointer', fontSize: '14px' }}>
-                                                        {item.likes.includes(MY_NICKNAME) ? '❤️' : '🤍'} {item.likes.length}
-                                                    </span>
-                                                    <span onClick={() => openLikeList(item.likes)} style={{ cursor: 'pointer', color: '#999', fontSize: '12px' }}>...</span>
-                                                </div>
-
-                                            </div>
-                                        ))}
-
-                                        {getFilteredPosts(recommendTab === 'today' ? recommendPosts : friendPosts).length === 0 && (
-                                            <p style={{ textAlign: 'center', color: '#999', marginTop: '20px' }}>
-                                                {recommendTab === 'today' ? '추천글이 없습니다.' : '친구들의 새 글이 없습니다.'}
-                                            </p>
-                                        )}
-                                    </div>
-                                </>
-                            )}
-                        </div>
+                <div style={{ display: 'flex', height: '540px', backgroundColor: '#fff', margin: '10px', border: '1px solid #ccc', borderRadius: '5px' }}>
+                    {activeTab !== 'together' && (
+                        <aside style={{ width: '220px', flexShrink: 0, borderRight: '1px dashed #ccc', padding: '15px', backgroundColor: '#fdfdfd' }}>
+                            <HomeSidebar
+                                currentUserId={currentUserId}
+                                myInfo={myInfo}
+                                onGoMyHome={handleGoMyHome}
+                                activeTab={activeTab}
+                                homeInfo={homeInfo}
+                                isMyHome={isMyHome}
+                                isMyFriend={isMyFriend}
+                                onVisitHome={visitHome}
+                                onOpenSettings={() => setIsSettingOpen(true)}
+                                onToggleFriend={toggleFriend}
+                            />
+                        </aside>
+                    )}
+                    <main style={{ flex: 1, overflowY: 'auto' }}>
+                        {activeTab === 'together' ? (
+                            <TogetherBoard currentUser={myInfo} />
+                        ) : (
+                            <HomeMainContent
+                                activeTab={activeTab}
+                                homeContentTab={homeContentTab}
+                                setHomeContentTab={setHomeContentTab}
+                                canAccess={canAccess}
+                                isMyHome={isMyHome}
+                                posts={posts}
+                                guestbook={guestbook}
+                                newGuestMsg={newGuestMsg}
+                                setNewGuestMsg={setNewGuestMsg}
+                                onOpenWrite={() => setIsWriteOpen(true)}
+                                onLike={handleLike}
+                                onShowLikes={handleShowLikes}
+                                onAddGuestbook={addGuestbook}
+                                onDeleteGuestbook={deleteGuestbook}
+                                onDeletePost={handleDeletePost}
+                                onToggleFriend={toggleFriend}
+                                feedTab={feedTab}
+                                setFeedTab={setFeedTab}
+                                onVisitHome={visitHome}
+                            />
+                        )}
                     </main>
                 </div>
             </WindowFrame>
 
-            {/* 설정 팝업 */}
-            {isSettingOpen && isMyHome && (
-                <Draggable nodeRef={nodeRef} handle=".pink-top-line">
-                    <div ref={nodeRef} style={{ position: 'fixed', top: '100px', left: '35%', zIndex: 1000 }}>
+            {/* 팝업들 */}
+            {isSettingOpen && (
+                <Draggable nodeRef={settingRef} handle=".window-header">
+                    <div ref={settingRef} style={{ position: 'fixed', top: '100px', left: '35%', zIndex: 1000, width: '290px' }}>
                         <WindowFrame title="Profile Setting" onClose={() => setIsSettingOpen(false)}>
-                            <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', padding: '15px', width: '220px', fontSize: '12px' }}>
+                            <div style={{ padding: '15px', display: 'flex', flexDirection: 'column', gap: '12px', fontSize: '13px' }}>
                                 <div style={{ textAlign: 'center' }}>
-                                    <div style={{ width: '80px', height: '80px', margin: '0 auto 10px', backgroundImage: `url(${tempImg})`, backgroundSize: 'cover', backgroundPosition: 'center', border: '1px solid #ccc' }} />
-                                    <label style={{ cursor: 'pointer', background: '#eee', padding: '3px 8px', border: '1px solid #ccc', fontSize: '11px' }}>
+                                    <div style={{
+                                        width: '80px', height: '80px', margin: '0 auto 10px',
+                                        backgroundImage: `url(${tempPreviewImg || '/default_profile.png'})`,
+                                        backgroundSize: 'cover', backgroundPosition: 'center',
+                                        borderRadius: '50%', border: '2px solid #FF69B4'
+                                    }} />
+                                    <label style={{ cursor: 'pointer', backgroundColor: '#eee', padding: '3px 8px', borderRadius: '3px', fontSize: '11px' }}>
                                         사진 변경
-                                        <input type="file" accept="image/*" onChange={handleImgChange} style={{ display: 'none' }} />
+                                        <input type="file" style={{ display: 'none' }} accept="image/*"
+                                            onChange={(e) => {
+                                                if (e.target.files[0]) {
+                                                    setTempProfileImg(e.target.files[0]);
+                                                    setTempPreviewImg(URL.createObjectURL(e.target.files[0]));
+                                                }
+                                            }}
+                                        />
                                     </label>
                                 </div>
-                                <div>닉네임: <input type="text" value={user.nickname} onChange={(e) => setUser({ ...user, nickname: e.target.value })} style={{ width: '95%' }} /></div>
-                                <div>소개글: <textarea value={user.intro} onChange={(e) => setUser({ ...user, intro: e.target.value })} style={{ width: '95%', height: '40px' }} /></div>
-                                <div style={{ background: '#fff0f5', padding: '8px', borderRadius: '5px' }}>
-                                    <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer' }}>
-                                        <input type="checkbox" checked={tempIsPrivate} onChange={(e) => setTempIsPrivate(e.target.checked)} />
-                                        <span style={{ fontWeight: 'bold', color: '#FF69B4' }}>🔒 비공개 홈 설정</span>
-                                    </label>
+                                <div>
+                                    <label style={{ display: 'block', marginBottom: '3px', fontWeight: 'bold', color: '#555' }}>닉네임</label>
+                                    <div style={{ display: 'flex', gap: '5px' }}>
+                                        <input type="text" value={tempNickname} onChange={handleNicknameChange} style={{ flex: 1, padding: '5px', border: '1px solid #ccc', borderRadius: '3px' }} />
+                                        <button onClick={checkNicknameDuplicate} style={{
+                                            fontSize: '11px', padding: '0 8px', cursor: 'pointer',
+                                            backgroundColor: (tempNickname !== homeInfo.nickname && !isNicknameChecked) ? '#FFF0F5' : '#eee',
+                                            border: (tempNickname !== homeInfo.nickname && !isNicknameChecked) ? '1px solid #FF69B4' : '1px solid #ccc',
+                                            color: (tempNickname !== homeInfo.nickname && !isNicknameChecked) ? '#FF1493' : '#000',
+                                            borderRadius: '3px'
+                                        }}>
+                                            {isNicknameChecked && tempNickname !== homeInfo.nickname ? "확인됨" : "중복확인"}
+                                        </button>
+                                    </div>
+                                    <div style={{ fontSize: '11px', marginTop: '4px', color: isNicknameChecked ? 'green' : 'red' }}>{nicknameMsg}</div>
                                 </div>
-                                <button onClick={saveSettings} style={{ background: '#FF69B4', color: '#fff', border: 'none', padding: '8px', cursor: 'pointer', marginTop: '5px' }}>저장하기 ✨</button>
+                                <div>
+                                    <label style={{ display: 'block', marginBottom: '3px', fontWeight: 'bold', color: '#555' }}>한줄 소개</label>
+                                    <input type="text" value={tempIntro} onChange={(e) => setTempIntro(e.target.value)} style={{ width: '100%', padding: '5px', border: '1px solid #ccc', borderRadius: '3px' }} />
+                                </div>
+                                <label style={{ display: 'flex', alignItems: 'center', gap: '5px', cursor: 'pointer' }}>
+                                    <input type="checkbox" checked={tempIsPrivate} onChange={(e) => setTempIsPrivate(e.target.checked)} />
+                                    <span style={{ color: '#666' }}>미니홈피 비공개</span>
+                                </label>
+                                <button onClick={saveSettings} style={{ background: '#FF69B4', color: 'white', border: 'none', padding: '8px', borderRadius: '4px', cursor: 'pointer', marginTop: '5px', fontWeight: 'bold' }}>변경사항 저장</button>
                             </div>
                         </WindowFrame>
                     </div>
                 </Draggable>
             )}
 
-            {/* 글쓰기 팝업 */}
-            {isWriteOpen && isMyHome && (
-                <Draggable nodeRef={writeRef} handle=".pink-top-line">
-                    <div ref={writeRef} style={{ position: 'fixed', top: '50px', left: '25%', zIndex: 1100 }}>
-                        <WindowFrame title="New Diary" onClose={() => setIsWriteOpen(false)}>
-                            <div style={{ width: '520px', background: '#fff' }}>
-                                <DrawingBoard onSave={handleUpload} isExpanded={true} />
-                            </div>
+            {isWriteOpen && (
+                <Draggable nodeRef={writeRef} handle=".window-header">
+                    <div ref={writeRef} style={{ position: 'fixed', top: '50px', left: '20%', zIndex: 1100 }}>
+                        <WindowFrame title="Drawing Board" onClose={() => setIsWriteOpen(false)}>
+                            {/* ▼▼▼ [수정] onSave와 onClose 모두 전달 ▼▼▼ */}
+                            <DrawingBoard
+                                onSave={handleUploadPost}
+                                onClose={() => setIsWriteOpen(false)}
+                            />
                         </WindowFrame>
                     </div>
                 </Draggable>
             )}
 
-            {/* 좋아요 리스트 팝업 */}
             {isLikeListOpen && (
-                <Draggable nodeRef={likeRef} handle=".pink-top-line">
-                    <div ref={likeRef} style={{ position: 'fixed', top: '200px', left: '40%', zIndex: 1200 }}>
-                        <WindowFrame title="Who Liked?" onClose={() => setIsLikeListOpen(false)}>
-                            <div style={{ width: '180px', padding: '15px', background: '#fff', fontSize: '12px', minHeight: '100px' }}>
-                                <ul style={{ listStyle: 'none', padding: 0 }}>
-                                    {selectedLikeUsers.length === 0 ? <li>아직 없어요...</li> : selectedLikeUsers.map((u, i) => <li key={i}>💖 {u}</li>)}
-                                </ul>
-                            </div>
+                <Draggable nodeRef={likeListRef} handle=".window-header">
+                    <div ref={likeListRef} style={{ position: 'fixed', top: '200px', left: '40%', zIndex: 1200, width: '200px' }}>
+                        <WindowFrame title="Likes" onClose={() => setIsLikeListOpen(false)}>
+                            <ul style={{ listStyle: 'none', padding: '10px' }}>
+                                {selectedLikeUsers.length > 0 ? selectedLikeUsers.map((u, i) => (
+                                    <li key={i} style={{ borderBottom: '1px dotted #ccc', padding: '5px' }}>{u.nickname}</li>
+                                )) : <li style={{ color: '#999', fontSize: '11px' }}>아직 좋아요가 없어요</li>}
+                            </ul>
                         </WindowFrame>
                     </div>
                 </Draggable>

@@ -11,16 +11,19 @@ const WindowFrame = ({ title, children, onClose, isMain = false }) => {
             marginBottom: '20px',
             boxShadow: '2px 2px 0px #000'
         }}>
-            {/* 핑크색 상단 바 */}
-            <div className="pink-top-line" style={{
+            {/* ✅ 수정된 부분: className에 "window-header" 추가 
+               (이게 있어야 Draggable이 제목 줄을 인식합니다!)
+            */}
+            <div className="pink-top-line window-header" style={{
                 background: 'linear-gradient(90deg, #FF69B4, #FFC1CC)',
                 padding: '4px 8px',
                 display: 'flex',
-                justifyContent: 'space-between', // 하이픈 대신 따옴표로 감싸거나 justifyContent로 써야함
+                justifyContent: 'space-between',
                 alignItems: 'center',
                 color: 'white',
                 fontWeight: 'bold',
-                fontSize: '14px'
+                fontSize: '14px',
+                cursor: 'move' // ✅ 마우스 올렸을 때 이동 아이콘 표시
             }}>
                 <span className="window-title">{title}</span>
                 <div className="window-controls" style={{ display: 'flex', gap: '5px' }}>
@@ -36,6 +39,8 @@ const WindowFrame = ({ title, children, onClose, isMain = false }) => {
                                 onClose();
                             }
                         }}
+                        // 닫기 버튼 누를 때는 드래그 방지 (이벤트 전파 중단)
+                        onMouseDown={(e) => e.stopPropagation()}
                         style={{
                             cursor: 'pointer',
                             background: '#ff4d4d',
