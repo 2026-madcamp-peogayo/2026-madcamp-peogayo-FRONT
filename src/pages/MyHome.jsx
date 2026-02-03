@@ -1,16 +1,21 @@
 import React, { useState, useRef, useEffect } from 'react';
 import Draggable from 'react-draggable';
-
+import { useParams } from 'react-router-dom';
 import WindowFrame from '../components/WindowFrame';
 import HomeSidebar from '../components/HomeSidebar';
 import HomeMainContent from '../components/HomeMainContent';
 import TogetherBoard from '../components/TogetherBoard';
-import DrawingBoard from '../components/DrawingBoard'; // DrawingBoard 컴포넌트 경로 확인 필요
+import DrawingBoard from '../components/DrawingBoard';
 
 // ★ 서버 URL 상수
 const SERVER_URL = "http://13.125.245.75:8080";
 
 const MyHome = () => {
+    // 1. URL 파라미터 및 기본 상태 정의
+    const { id } = useParams();
+    // id가 없으면(내 홈으로 바로 왔을 때) 처리를 위해 일단 변수에 담음
+    const targetId = id;
+
     const [activeTab, setActiveTab] = useState('home');
     const [homeContentTab, setHomeContentTab] = useState('posts');
 
@@ -48,79 +53,25 @@ const MyHome = () => {
 
     const isMyHome = myInfo && currentUserId === myInfo.id;
     const canAccess = isMyHome || !homeInfo.isHomePrivate;
-    // userId 혹은 id 둘 중 하나라도 일치하면 친구로 인정
     const isMyFriend = myInfo && homeInfo.friends?.some(f => (f.userId || f.id) === myInfo.id);
-    const [feedTab, setFeedTab] = useState('ALL'); // 'ALL' 또는 'FRIENDS'
+    const [feedTab, setFeedTab] = useState('ALL');
 
-    // ★ 이미지 URL 처리 헬퍼 함수
+    // ─────────────────────────────────────────────────────────────
+    // [헬퍼 함수 정의]
+    // ─────────────────────────────────────────────────────────────
     const getImgUrl = (path) => {
         if (!path) return null;
         if (path.startsWith('http')) return path;
         return `${SERVER_URL}${path.startsWith('/') ? '' : '/'}${path}`;
     };
 
-    // 1. 내 정보 체크
-    useEffect(() => {
-        const checkSession = async () => {
-            try {
-                const res = await fetch('/api/users/me');
-                if (res.ok) {
-                    const data = await res.json();
-                    setMyInfo(data);
-                    if (!currentUserId) setCurrentUserId(data.id);
-                }
-            } catch (e) { console.error("Session Check Failed", e); }
-        };
-        checkSession();
-    }, []);
-
-    // 2. 홈피 데이터 로드
-    useEffect(() => {
-        if (currentUserId) loadHomeData(currentUserId);
-    }, [currentUserId]);
-
-
-    // 3. 추천 탭 (전체공개/친구공개 글) 로직 구현
-    useEffect(() => {
-        const fetchFeeds = async () => {
-            if (activeTab === 'recommend') {
-                try {
-                    // API 엔드포인트는 백엔드 명세에 맞게 수정 필요 (예시: /api/posts/public, /api/posts/friends)
-                    const endpoint = feedTab === 'ALL' ? '/api/posts/public' : '/api/posts/feed';
-                    const res = await fetch(endpoint);
-                    if (res.ok) {
-                        const data = await res.json();
-                        const processed = data.map(p => ({
-                            ...p,
-                            contentImageUrl: getImgUrl(p.contentImageUrl),
-                            writerProfileImg: getImgUrl(p.writerProfileImg)
-                        }));
-                        setPosts(processed);
-                    }
-                } catch (e) {
-                    console.error("피드 로딩 실패", e);
-                }
-            }
-        };
-        fetchFeeds();
-    }, [activeTab, feedTab]); // 탭이 바뀌거나 피드필터가 바뀌면 재실행
-
-    const handleGoMyHome = () => {
-        if (!myInfo) {
-            console.log("내 정보를 불러오는 중입니다...");
-            return;
-        }
-        setPosts([]); // 기존 글 비우기
-        setCurrentUserId(myInfo.id);
-        setActiveTab('home');
-        setHomeContentTab('posts');
-        loadHomeData(myInfo.id);
-    };
-
-    const loadHomeData = async (targetId) => {
+    // ★★★ [중요] loadHomeData를 useEffect보다 먼저 정의해야 에러가 안 납니다! ★★★
+    const loadHomeData = async (tgtId, viewerInfo = myInfo) => {
         try {
+            const viewerId = viewerInfo?.id;
+
             // 1. 홈 기본 정보
-            const homeRes = await fetch(`/api/home/${targetId}`);
+            const homeRes = await fetch(`/api/home/${tgtId}`);
             let homeData = {};
             if (homeRes.ok) {
                 homeData = await homeRes.json();
@@ -130,7 +81,7 @@ const MyHome = () => {
             // 2. 친구 목록
             let friendsData = [];
             try {
-                const friendRes = await fetch(`/api/friends/${targetId}`);
+                const friendRes = await fetch(`/api/friends/${tgtId}`);
                 if (friendRes.ok) {
                     friendsData = await friendRes.json();
                     friendsData = friendsData.map(f => ({
@@ -148,8 +99,8 @@ const MyHome = () => {
                 friends: friendsData
             });
 
-            // 4. 내 홈이면 설정값 초기화
-            if (myInfo && Number(targetId) === Number(myInfo.id)) {
+            // 3. 내 홈이면 설정값 초기화
+            if (viewerId && Number(tgtId) === Number(viewerId)) {
                 setTempNickname(homeData.nickname || '');
                 setTempIntro(homeData.greeting || '');
                 setTempPreviewImg(homeData.profileImageUrl);
@@ -158,20 +109,22 @@ const MyHome = () => {
                 setNicknameMsg('');
             }
 
-            // 5. 게시글 목록
-            const postRes = await fetch(`/api/posts/${targetId}`);
+            // 4. 게시글 목록 (좋아요 상태 계산 포함)
+            const postRes = await fetch(`/api/posts/${tgtId}`);
             if (postRes.ok) {
                 const postData = await postRes.json();
                 const processedPosts = postData.map(p => ({
                     ...p,
                     contentImageUrl: getImgUrl(p.contentImageUrl),
-                    writerProfileImg: getImgUrl(p.writerProfileImg)
+                    writerProfileImg: getImgUrl(p.writerProfileImg),
+                    // 좋아요 여부 계산 (viewerId 사용)
+                    isLiked: p.likeUsers?.some(user => user.id === viewerId) || false
                 }));
                 setPosts(processedPosts);
             }
 
-            // 6. 방명록
-            const guestRes = await fetch(`/api/guestbooks/${targetId}`);
+            // 5. 방명록
+            const guestRes = await fetch(`/api/guestbooks/${tgtId}`);
             if (guestRes.ok) {
                 const guestData = await guestRes.json();
                 const processedGuestbook = guestData.map(g => ({
@@ -186,15 +139,167 @@ const MyHome = () => {
         }
     };
 
-    // --- 기능 핸들러 ---
+    // ─────────────────────────────────────────────────────────────
+    // [useEffect] 데이터 로드 로직 (함수 정의보다 아래에 있어야 함)
+    // ─────────────────────────────────────────────────────────────
+
+    // 1. 세션 체크 & 홈 데이터 로드
+    useEffect(() => {
+        const initHome = async () => {
+            if (activeTab === 'recommend') return;
+
+            let userInfo = myInfo;
+
+            // 세션 체크
+            if (!userInfo || !userInfo.id) {
+                try {
+                    const res = await fetch('/api/users/me');
+                    if (res.ok) {
+                        userInfo = await res.json();
+                        setMyInfo(userInfo);
+                        setCurrentUserId(userInfo.id);
+                    }
+                } catch (e) {
+                    console.log("세션 체크 실패");
+                }
+            }
+
+            // 데이터 로드
+            const idToLoad = targetId || userInfo?.id;
+            if (idToLoad) {
+                loadHomeData(idToLoad, userInfo);
+            }
+        };
+
+        initHome();
+    }, [activeTab, targetId]);
+
+    // 2. 추천 탭 (전체공개/일촌공개) 데이터 로드 - API 명세서 반영 완료
+    // 2. 추천 탭 (전체공개/일촌공개) 데이터 로드 - [최종 수정] 토큰 검사 제거
+    useEffect(() => {
+        const fetchFeeds = async () => {
+            if (activeTab !== 'recommend') return;
+
+            // ★ 수정됨: 불필요한 토큰 검사(localStorage) 삭제
+            // 대신 myInfo(내 정보)가 있는지로 판단
+            if (feedTab === 'FRIENDS' && !myInfo) {
+                // 아직 내 정보 로딩 중일 수도 있으니 alert 대신 콘솔만 찍고 중단
+                console.log("일촌 글 로딩 대기 중 (내 정보 없음)...");
+                return;
+            }
+
+            try {
+                // ★ 명세서대로 주소 설정 (이건 맞습니다!)
+                // 전체보기: /api/main/posts/all
+                // 친구보기: /api/main/posts/friends
+                const endpoint = feedTab === 'ALL'
+                    ? '/api/main/posts/all'
+                    : '/api/main/posts/friends';
+
+                // ★ 수정됨: Authorization 헤더 제거 (세션/쿠키 방식이므로 필요 없음)
+                const res = await fetch(endpoint);
+
+                if (res.ok) {
+                    const data = await res.json();
+
+                    // 데이터가 배열인지, content 객체인지 확인 후 처리
+                    const feedList = Array.isArray(data) ? data : (data.content || []);
+
+                    const processed = feedList.map(p => ({
+                        ...p,
+                        contentImageUrl: getImgUrl(p.contentImageUrl),
+                        writerProfileImg: getImgUrl(p.writerProfileImg),
+                        isLiked: p.likeUsers?.some(user => user.id === myInfo?.id) || false
+                    }));
+
+                    setPosts(processed);
+                } else {
+                    console.error(`[Feed Load] 실패 status: ${res.status}`);
+                }
+            } catch (e) {
+                console.error("[Feed Load] 에러:", e);
+            }
+        };
+
+        if (activeTab === 'recommend') {
+            fetchFeeds();
+        }
+    }, [activeTab, feedTab, myInfo]); // myInfo가 로딩되면(로그인 확인되면) 다시 실행됨
+    // ─────────────────────────────────────────────────────────────
+    // [이벤트 핸들러]
+    // ─────────────────────────────────────────────────────────────
+
+    // 2. 추천 탭 (전체공개/일촌공개) 데이터 로드 - [최종 수정] 토큰 검사 제거
+    useEffect(() => {
+        const fetchFeeds = async () => {
+            if (activeTab !== 'recommend') return;
+
+            // ★ 수정됨: 불필요한 토큰 검사(localStorage) 삭제
+            // 대신 myInfo(내 정보)가 있는지로 판단
+            if (feedTab === 'FRIENDS' && !myInfo) {
+                // 아직 내 정보 로딩 중일 수도 있으니 alert 대신 콘솔만 찍고 중단
+                console.log("일촌 글 로딩 대기 중 (내 정보 없음)...");
+                return;
+            }
+
+            try {
+                // ★ 명세서대로 주소 설정 (이건 맞습니다!)
+                // 전체보기: /api/main/posts/all
+                // 친구보기: /api/main/posts/friends
+                const endpoint = feedTab === 'ALL'
+                    ? '/api/main/posts/all'
+                    : '/api/main/posts/friends';
+
+                // ★ 수정됨: Authorization 헤더 제거 (세션/쿠키 방식이므로 필요 없음)
+                const res = await fetch(endpoint);
+
+                if (res.ok) {
+                    const data = await res.json();
+
+                    // 데이터가 배열인지, content 객체인지 확인 후 처리
+                    const feedList = Array.isArray(data) ? data : (data.content || []);
+
+                    const processed = feedList.map(p => ({
+                        ...p,
+                        contentImageUrl: getImgUrl(p.contentImageUrl),
+                        writerProfileImg: getImgUrl(p.writerProfileImg),
+                        isLiked: p.likeUsers?.some(user => user.id === myInfo?.id) || false
+                    }));
+
+                    setPosts(processed);
+                } else {
+                    console.error(`[Feed Load] 실패 status: ${res.status}`);
+                }
+            } catch (e) {
+                console.error("[Feed Load] 에러:", e);
+            }
+        };
+
+        if (activeTab === 'recommend') {
+            fetchFeeds();
+        }
+    }, [activeTab, feedTab, myInfo]); // myInfo가 로딩되면(로그인 확인되면) 다시 실행됨
+    
+    const handleGoMyHome = () => {
+        if (!myInfo) {
+            console.log("내 정보를 불러오는 중입니다...");
+            return;
+        }
+        setPosts([]);
+        setCurrentUserId(myInfo.id);
+        setActiveTab('home');
+        setHomeContentTab('posts');
+        loadHomeData(myInfo.id, myInfo); // 내 정보 명시적 전달
+    };
+
     const visitHome = (userId) => {
         setCurrentUserId(userId);
         setActiveTab('home');
         setHomeContentTab('posts');
+        loadHomeData(userId, myInfo);
     };
 
     const handleSurfing = async () => {
-        // 무한 루프 방지를 위해 최대 3번까지만 재시도
         let retryCount = 0;
         const MAX_RETRIES = 3;
         let foundOthers = false;
@@ -204,32 +309,26 @@ const MyHome = () => {
                 const res = await fetch('/api/main/surfing');
                 if (res.ok) {
                     const data = await res.json();
-                    let targetId = null;
-
-                    // 데이터 파싱 (객체인지 숫자인지 확인)
+                    let tId = null;
                     if (typeof data === 'object' && data !== null) {
-                        targetId = data.userId || data.id;
+                        tId = data.userId || data.id;
                     } else if (typeof data === 'number') {
-                        targetId = data;
+                        tId = data;
                     }
 
-                    if (targetId) {
-                        // ★ 핵심 로직: 내가 아니면 이동하고 종료
-                        if (Number(targetId) !== Number(currentUserId)) {
-                            visitHome(targetId);
+                    if (tId) {
+                        if (Number(tId) !== Number(currentUserId)) {
+                            visitHome(tId);
                             foundOthers = true;
-                            break; // 루프 탈출
+                            break;
                         } else {
-                            // 나 자신이 나오면 로그만 찍고 다시 루프를 돕니다
-                            console.log(`파도타기 ${retryCount + 1}번째 시도: 나 자신이 나왔습니다. 다시 찾습니다... 🌊`);
+                            console.log(`파도타기 ${retryCount + 1}번째 시도: 나 자신. 재시도...`);
                             retryCount++;
                         }
                     } else {
-                        // ID가 없으면 그냥 종료
                         break;
                     }
                 } else {
-                    alert("파도타기 서버 오류!");
                     break;
                 }
             } catch (e) {
@@ -237,10 +336,8 @@ const MyHome = () => {
                 break;
             }
         }
-
-        // 3번 다 돌았는데도 나만 나왔거나 실패했을 경우
         if (!foundOthers) {
-            alert("지금은 파도를 탈 수 있는 다른 미니홈피가 없어요 😢 (혹시 나 혼자?!)");
+            alert("지금은 파도를 탈 수 있는 다른 미니홈피가 없어요 😢");
         }
     };
 
@@ -296,8 +393,6 @@ const MyHome = () => {
         };
         formData.append('data', new Blob([JSON.stringify(jsonPart)], { type: 'application/json' }));
         if (tempProfileImg) {
-            // 주의: 백엔드가 'image'를 원하는지 'profileImage'를 원하는지 확인 필요
-            // 여기서는 기존 코드대로 'profileImage' 유지
             formData.append('profileImage', tempProfileImg);
         }
 
@@ -316,20 +411,12 @@ const MyHome = () => {
         } catch (e) { console.error(e); }
     };
 
-    // ▼▼▼ [수정된 부분] 게시글 업로드 핸들러 ▼▼▼
     const handleUploadPost = async (blob) => {
         if (!blob) return alert("이미지가 생성되지 않았습니다.");
-
         const formData = new FormData();
-        // 1. 이미지 파일 추가 (File 객체로 변환 추천)
         const file = new File([blob], `drawing_${Date.now()}.png`, { type: "image/png" });
         formData.append("image", file);
-
-        // 2. 게시글 정보 (JSON) - postDto 변수 제거하고 직접 객체 생성
-        const postData = {
-            visibility: "PUBLIC"
-        };
-
+        const postData = { visibility: "PUBLIC" };
         formData.append("data", new Blob([JSON.stringify(postData)], { type: "application/json" }));
 
         try {
@@ -339,22 +426,24 @@ const MyHome = () => {
             });
             if (res.ok) {
                 alert("업로드 완료! 🎨");
-                setIsWriteOpen(false); // 창 닫기
-                loadHomeData(currentUserId); // 목록 새로고침
+                setIsWriteOpen(false);
+                loadHomeData(currentUserId);
             } else {
-                const errText = await res.text();
-                console.error("Upload Error:", errText);
-                alert("업로드 실패 ㅠㅠ (서버 로그 확인)");
+                alert("업로드 실패 ㅠㅠ");
             }
         } catch (e) {
             console.error(e);
             alert("서버 에러 발생");
         }
     };
-    // ▲▲▲ --------------------------------- ▲▲▲
 
-    const handleShowLikes = () => {
-        setSelectedLikeUsers([{ nickname: '테스트유저' }]);
+    const handleShowLikes = (postId) => {
+        const targetPost = posts.find(p => p.id === postId);
+        if (targetPost && targetPost.likeUsers) {
+            setSelectedLikeUsers(targetPost.likeUsers);
+        } else {
+            setSelectedLikeUsers([]);
+        }
         setIsLikeListOpen(true);
     };
 
@@ -362,12 +451,11 @@ const MyHome = () => {
         if (!myInfo) return alert("로그인이 필요합니다 😢");
         if (isMyHome) return alert("자기 자신과는 일촌을 맺을 수 없습니다 😅");
 
-        const targetId = homeInfo.userId || homeInfo.id;
+        const tId = homeInfo.userId || homeInfo.id;
         const isAdding = !isMyFriend;
         const url = isAdding
-            ? `/api/friends/request/${targetId}`
-            : `/api/friends/${targetId}`;
-
+            ? `/api/friends/request/${tId}`
+            : `/api/friends/${tId}`;
         const method = isAdding ? 'POST' : 'DELETE';
         const actionMsg = isAdding ? '일촌 목록에 추가하시겠습니까?' : '일촌을 끊으시겠습니까?';
 
@@ -377,20 +465,18 @@ const MyHome = () => {
             const res = await fetch(url, { method: method });
             if (res.ok) {
                 alert(isAdding ? "일촌으로 등록되었습니다! 🎉" : "일촌이 해제되었습니다.");
-                // 화면 갱신
-                loadHomeData(targetId);
-                // 내 정보(내 사이드바 친구목록)도 갱신
+                loadHomeData(tId);
                 const meRes = await fetch('/api/users/me');
                 if (meRes.ok) {
                     const meData = await meRes.json();
                     setMyInfo(meData);
                 }
             } else {
-                alert("처리 실패! (서버 로그를 확인해주세요)");
+                alert("처리 실패!");
             }
         } catch (e) {
             console.error("일촌 기능 에러:", e);
-            alert("네트워크 오류가 발생했습니다.");
+            alert("네트워크 오류");
         }
     };
 
@@ -415,18 +501,46 @@ const MyHome = () => {
     };
 
     const handleDeletePost = async (postId) => {
-        if (!window.confirm("정말 이 게시글을 삭제하시겠습니까? (복구 불가)")) return;
+        if (!window.confirm("정말 이 게시글을 삭제하시겠습니까?")) return;
         try {
             const res = await fetch(`/api/posts/${postId}`, { method: 'DELETE' });
-            if (res.ok) { alert("게시글이 삭제되었습니다. 🗑️"); loadHomeData(currentUserId); }
+            if (res.ok) { alert("게시글이 삭제되었습니다."); loadHomeData(currentUserId); }
             else { alert("삭제 실패"); }
         } catch (e) { alert("서버 오류"); }
     };
 
+    // ▼▼▼ [오타 수정됨] 이상한 '좋아요' 글자 제거 완료 ▼▼▼
     const handleLike = async (postId) => {
-        try { await fetch(`/api/posts/${postId}/like`, { method: 'POST' }); loadHomeData(currentUserId); } catch (e) { }
+        setPosts(prevPosts => prevPosts.map(post => {
+            if (post.id === postId) {
+                const currentlyLiked = post.isLiked;
+                return {
+                    ...post,
+                    isLiked: !currentlyLiked,
+                    likeCount: currentlyLiked
+                        ? (post.likeCount || 1) - 1
+                        : (post.likeCount || 0) + 1,
+                    likeUsers: currentlyLiked
+                        ? post.likeUsers?.filter(u => u.id !== currentUserId)
+                        : [...(post.likeUsers || []), myInfo]
+                };
+            }
+            return post;
+        }));
+
+        try {
+            const res = await fetch(`/api/posts/${postId}/like`, { method: 'POST' });
+            if (!res.ok) throw new Error("서버 반영 실패");
+        } catch (e) {
+            console.error("좋아요 실패", e);
+            alert("좋아요 처리에 실패했습니다.");
+            loadHomeData(currentUserId);
+        }
     };
 
+    // ─────────────────────────────────────────────────────────────
+    // [JSX 렌더링]
+    // ─────────────────────────────────────────────────────────────
     return (
         <div style={{ padding: '20px', backgroundColor: '#FFDEE9', minHeight: '100vh', fontFamily: 'DungGeunMo, sans-serif' }}>
             <WindowFrame
@@ -442,7 +556,16 @@ const MyHome = () => {
                             color: activeTab === 'home' && isMyHome ? '#FF69B4' : '#000'
                         }}
                     >마이홈(H)</span>
-                    <span onClick={() => setActiveTab('recommend')} style={{ cursor: 'pointer', fontWeight: activeTab === 'recommend' ? 'bold' : 'normal', color: activeTab === 'recommend' ? '#FF69B4' : '#000' }}>추천(R)</span>
+                    <span
+                        onClick={() => {
+                            setActiveTab('recommend');
+                            setHomeContentTab('posts'); // ★ 이 줄이 핵심입니다! 게시글 모드로 강제 전환
+                            setPosts([]); // 기존 글 비워주기 (로딩 느낌)
+                        }}
+                        style={{ cursor: 'pointer', fontWeight: activeTab === 'recommend' ? 'bold' : 'normal', color: activeTab === 'recommend' ? '#FF69B4' : '#000' }}
+                    >
+                        추천(R)
+                    </span>
                     <span onClick={handleSurfing} style={{ cursor: 'pointer', color: '#1596ff', fontWeight: 'normal' }}>파도타기(S)</span>
                     <span onClick={() => setActiveTab('together')} style={{ cursor: 'pointer', color: '#9932CC', fontWeight: activeTab === 'together' ? 'bold' : 'normal', borderLeft: '1px solid #ccc', paddingLeft: '15px' }}>함께그리기</span>
                 </div>
@@ -554,7 +677,6 @@ const MyHome = () => {
                 <Draggable nodeRef={writeRef} handle=".window-header">
                     <div ref={writeRef} style={{ position: 'fixed', top: '50px', left: '20%', zIndex: 1100 }}>
                         <WindowFrame title="Drawing Board" onClose={() => setIsWriteOpen(false)}>
-                            {/* ▼▼▼ [수정] onSave와 onClose 모두 전달 ▼▼▼ */}
                             <DrawingBoard
                                 onSave={handleUploadPost}
                                 onClose={() => setIsWriteOpen(false)}

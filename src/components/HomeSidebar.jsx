@@ -111,7 +111,7 @@ const HomeSidebar = ({
                                         backgroundSize: 'cover', backgroundPosition: 'center', border: '2px solid #FFC1CC', marginBottom: '8px'
                                     }} />
                                     <span style={{ fontSize: '13px', fontWeight: 'bold', color: '#333' }}>{user.nickname}</span>
-                                    <span style={{ fontSize: '10px', color: '#999' }}>파도타기 🌊</span>
+                                    <span style={{ fontSize: '10px', color: '#999' }}>방문하기</span>
                                 </div>
                             ))
                         ) : (

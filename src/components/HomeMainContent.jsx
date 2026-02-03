@@ -85,11 +85,33 @@ const HomeMainContent = ({
                                     {post.contentText}
                                 </div>
 
-                                {/* 좋아요 */}
-                                <div style={{ fontSize: '12px', color: '#888', display: 'flex', gap: '8px', alignItems: 'center' }}>
-                                    <span onClick={() => onLike(post.id)} style={{ cursor: 'pointer', color: post.isLiked ? '#FF69B4' : '#888', fontWeight: 'bold' }}>
-                                        {post.isLiked ? '❤️' : '🤍'} 좋아요 {post.likeCount || 0}
+                                {/* 좋아요 영역 */}
+                                <div style={{ fontSize: '12px', color: '#888', display: 'flex', gap: '5px', alignItems: 'center' }}>
+
+                                    {/* 1. 하트와 '좋아요' 글씨 -> 클릭 시 좋아요 토글 (onLike) */}
+                                    <span
+                                        onClick={() => onLike(post.id)}
+                                        style={{ cursor: 'pointer', color: post.isLiked ? '#FF69B4' : '#888', fontWeight: 'bold' }}
+                                    >
+                                        {post.isLiked ? '❤️' : '🤍'} 좋아요
                                     </span>
+
+                                    {/* 2. 숫자 부분 -> 클릭 시 팝업 열기 (onShowLikes) */}
+                                    <span
+                                        onClick={(e) => {
+                                            e.stopPropagation(); // 혹시 모를 버블링 방지
+                                            onShowLikes(post.id); // ★ 명단 보기 함수 실행
+                                        }}
+                                        style={{
+                                            cursor: 'pointer',
+                                            fontWeight: 'bold',
+                                            color: '#333',
+                                            textDecoration: 'underline' // 클릭 가능하다는 느낌 주기
+                                        }}
+                                    >
+                                        ({post.likeCount || 0})
+                                    </span>
+
                                 </div>
                             </div>
                         ))
