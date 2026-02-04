@@ -8,7 +8,14 @@ import TogetherBoard from '../components/TogetherBoard';
 import DrawingBoard from '../components/DrawingBoard';
 
 // ★ 서버 URL 상수
-const SERVER_URL = "http://13.125.245.75:8080";
+// MyHome.jsx 상단
+
+// ❌ 기존 코드 (지우세요)
+// const SERVER_URL = "http://13.125.245.75:8080";
+
+// ✅ 수정 코드 (빈 문자열로 두세요)
+// 이렇게 하면 이미지를 부를 때도 "/uploads/..."가 되어 프록시 설정을 따라갑니다.
+const SERVER_URL = "";
 
 const MyHome = () => {
     // 1. URL 파라미터 및 기본 상태 정의
